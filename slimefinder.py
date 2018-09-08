@@ -1,7 +1,8 @@
-from multiprocessing import Process, Array, cpu_count, freeze_support,  Value, Queue
+from multiprocessing import Process, Array, cpu_count, freeze_support, Value, Queue
 import numpy as np
-from math import ceil,floor
+from math import ceil, floor
 from matplotlib import pyplot as plt
+import time
 import ctypes
 
 
@@ -35,6 +36,7 @@ def javaInt32(val):
 def javaInt64(val):
     return ((val + (1 << 63)) % (1 << 64)) - (1 << 63)
 
+
 # cx is horizontal and cz is vertical
 def itsASlime(cx, cz, worldseed):
     return not nextInt(10, (javaInt64(
@@ -46,10 +48,11 @@ def initialize(r, s, w, offset):
     a = np.zeros((s, s), dtype=bool)
     for i in range(s):
         for j in range(s):
-            a[i][j] = itsASlime(-r + j , i + offset, w)
+            a[i][j] = itsASlime(-r + j, i + offset, w)
     return a
 
-#this method will not be used as implemented as we initialize an area for each workers in the same time then go right
+
+# this method will not be used as implemented as we initialize an area for each workers in the same time then go right
 # but if we instead initialize an area then cut it in "cores" pieces then do each part with the workers and when done
 # move down then this method can be useful
 def goDown(a, nbr, s, x, z, w):
@@ -60,12 +63,14 @@ def goDown(a, nbr, s, x, z, w):
             b[i][j] = itsASlime(x + j, z + s + i, w)
     return np.concatenate((a, b))
 
+
 """Shift the current array by one column, removing the first one and appending the last,
 it takes in arguments the array (a), the number oh shifts to do (usually one), the size 
 of the area (aka the array lenght), the x and z coordinate to which it should start, the
 worldseed (w)"""
+
+
 def goRight(a, nbr, s, x, z, w):
-    i = 0
     for i in range(s):
         for j in range(nbr):
             a[i] = np.concatenate((a[i][1:], [itsASlime(x + s + j, z + i, w)]))
@@ -74,6 +79,7 @@ def goRight(a, nbr, s, x, z, w):
 
 def checkMask(mask, layer):
     return np.array_equal(mask, layer)
+
 
 """We first initialize a grid of size*size, we do it on the upper left corner of the radius
 area (it ranges from -radius,-radius to +radius,+radius, ofc we shift that initialization
@@ -102,73 +108,74 @@ and so on, moving by strip, so moving after initialization 2*radius-size+1 so he
 radius=5 and size=4 its 7 goRight called
  
 """
-def workers(mask, index, offset, seed, size, radius,cores,result):
 
-    block=initialize(radius,size,seed,offset*cores+index)
-    plt.imshow(block, interpolation='nearest')
-    plt.show()
-    print(radius,size,seed,offset*cores+index)
-    if checkMask(mask,block):
-        result.put((0,offset*cores+index))
-    for i in range(-radius+1,radius-size+1):
-        block=goRight(block,1,size,i,offset*cores+index,seed)
+
+def workers(mask, index, offset, seed, size, radius, cores, result):
+    block = initialize(radius, size, seed, offset * cores + index)
+    if checkMask(mask, block):
+        result.put((0, offset * cores + index))
+    for i in range(-radius, radius - 1):
+        block = goRight(block, 1, size, i, offset * cores + index, seed)
         if checkMask(mask, block):
-            print(block,(i, offset,index,cores))
-            result.put((i, offset * cores + index))
+            result.put((i+1, offset * cores + index))
+
+
 
 # size is a square (default is 16x16), radius is a positive number referring to how large one quadrant (square) should be,
 # then we extend at the 3 others, so basically its a square from -radius,-radius to +radius,+radius
 def main(radius, seed, size, mask):
     assert size, radius > 0
-    result=[]
+    result = []
     processPool = []
-    result_queue=Queue()
+    result_queue = Queue()
 
     # we share everything among the workers, technically its not needed but as we will instantiate quite a lot of them,
     # better be safe
 
-    #cores,seed, size, radius  = Value('d',cpu_count()), Value('d', seed), Value('d', size), Value('d', radius)
-    cores=cpu_count()
-    for offset in range(-floor(radius/cores),ceil(radius/ cores)):
-        print(offset)
+    # cores,seed, size, radius  = Value('d',cpu_count()), Value('d', seed), Value('d', size), Value('d', radius)
+    cores = cpu_count()
+    for offset in range(-floor(radius / cores), ceil(radius / cores)):
         for i in range(cpu_count()):
-            p = Process(target=workers, args=(mask, i, offset, seed, size, radius,cores,result_queue))
+            p = Process(target=workers, args=(mask, i, offset, seed, size, radius, cores, result_queue))
             p.daemon = True
             p.start()
             processPool.append(p)
+
+        # waiting for the childs processes to catch up
+        for el in processPool:
+            p.join()
         result_queue.put("DONE")
-        while 1:
+        while True:
             temp=result_queue.get()
+
             if temp=="DONE":
                 break
             result.append(temp)
-        #waiting for the childs processes to catch up
-        for el in processPool:
-            p.join()
     print(result)
+
 
 def showAGrid(a):
     fig, ax = plt.subplots()
-    im=ax.imshow(a)
-    ax.set_xticks(np.arange(len(a)+1)-0.5,minor=1)
-    ax.set_yticks(np.arange(len(a[0])+1)-0.5,minor=1)
+    im = ax.imshow(a)
+    ax.set_xticks(np.arange(len(a) + 1) - 0.5, minor=1)
+    ax.set_yticks(np.arange(len(a[0]) + 1) - 0.5, minor=1)
     ax.grid(which="minor", color="black", linestyle='-', linewidth=1)
     fig.tight_layout()
     plt.show()
 
+
 if __name__ == '__main__':
+    t=time.time()
     freeze_support()
-    size = 5
+    size = 12
     seed = 2
-    radius = 8
-    mask = np.zeros((size, size), dtype=bool)
+    radius = 5000
+    mask=np.zeros((size,size),dtype=bool)
     main(radius, seed, size, mask)
-    a=initialize(radius,radius*2+size-1,seed,-radius)
-    showAGrid(a)
-
-
-
-
+    print(time.time()-t)
+    """a = initialize(radius, radius * 2 + size - 1, seed, -radius)
+    showAGrid(a)"""
+    print("The results are in chunks compared to 0 0, also you need to read it as chunkX,chunkZ")
 
 """
 
