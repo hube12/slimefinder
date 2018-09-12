@@ -1,7 +1,7 @@
 # slimefinder
 
 
-how to use, either open slimefinder or slimeClean (second is better as less messy)
+how to use, either open slimefinder.py or slimeClean.py (second is better as less messy)
 then make a numpy array with what type of repartition of slime chunk you want to find
 put your seed in the appropriate field, put your range to search (in slime so coordinates x 16), i put 20k which is about 320k far in 4 quadrant so a 640kx640k blocks covered. Usually you want to only put 10k in radius.
 You can change size to use a bigger or smaller template, that's up to you. 
