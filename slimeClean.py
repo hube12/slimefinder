@@ -29,10 +29,13 @@ def nextInt(n, seed):
 def javaInt64(val):
     return ((val + (1 << 63)) % (1 << 64)) - (1 << 63)
 
+
+def javaInt32(val):
+    return ((val + (1 << 31)) % (1 << 32)) - (1 << 31)
+
 def itsASlime(cx, cz, worldseed):
-    return not nextInt(10, (javaInt64(
-            worldseed + cx * cx * 4987142 + cx * 5947611 + cz * cz * 4392871 +
-            cz * 389711)) ^ 987234911)
+    seed= javaInt64(worldseed + javaInt32(cx * cx * 4987142) + javaInt32(cx * 5947611) + javaInt32(cz * cz) * 4392871 + javaInt32(cz * 389711) ^ 987234911)
+    return not nextInt(10, seed)
 
 def initialize(r, s, w, offset):
     a = np.zeros((s, s), dtype=bool)
